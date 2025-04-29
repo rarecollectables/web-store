@@ -1,6 +1,5 @@
 import React, { useRef } from 'react';
-import { View, Text, FlatList, StyleSheet, Pressable, Animated } from 'react-native';
-import { Image as ExpoImage } from 'expo-image';
+import { View, Text, FlatList, StyleSheet, Pressable, Animated, Image } from 'react-native';
 import { colors, fontFamily } from '../../theme';
 import { useStore } from '../../context/store';
 import { LOCAL_IMAGES, PRODUCTS } from '../(data)/products';
@@ -95,10 +94,10 @@ export default function WishlistScreen() {
               accessibilityLabel={`View details for ${product.title}`}
               accessibilityRole="button"
             >
-              <ExpoImage
+              <Image
                 source={images[0]}
                 style={styles.image}
-                contentFit="cover"
+                resizeMode="cover"
               />
               <View style={styles.itemDetails}>
                 <Text style={styles.title}>{product.title}</Text>

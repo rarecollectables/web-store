@@ -15,7 +15,6 @@
     "expo-linear-gradient": "~12.7.0",
     "expo-linking": "~5.0.0",
     "expo-router": "~3.5.6",
-    "expo-secure-store": "~12.3.0",
     "expo-status-bar": "~1.8.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",
@@ -28,8 +27,7 @@
     "react-native-skeleton-placeholder": "^5.2.4",
     "react-native-web": "~0.18.10",
     "styled-components": "^6.1.17",
-    "zod": "^3.24.3",
-    "expo-image": "~1.4.0"
+    "zod": "^3.24.3"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0"

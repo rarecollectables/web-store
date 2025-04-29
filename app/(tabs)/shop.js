@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useCallback, memo, useRef } from 'react';
-import { FlatList, View, Text, Pressable, StyleSheet, useWindowDimensions, Platform, Animated } from 'react-native';
+import { FlatList, View, Text, Pressable, StyleSheet, useWindowDimensions, Platform, Animated, Image } from 'react-native';
 import { useRouter, useGlobalSearchParams } from 'expo-router';
 import { PRODUCTS, LOCAL_IMAGES } from '../(data)/products';
 import { colors, fontFamily, spacing, borderRadius, shadows } from '../../theme';
 import { useStore } from '../../context/store';
 import { Alert } from 'react-native';
-import { Image as ExpoImage } from 'expo-image';
 
 const CARD_ASPECT_RATIO = 1.25;
 const CARD_MIN_WIDTH = 220;
@@ -59,11 +58,10 @@ function ProductCard({ item, cardWidth, router }) {
       accessibilityLabel={`View details for ${item.title}`}
     >
       <View style={styles.imageWrapper}>
-        <ExpoImage
+        <Image
           source={images[currentIndex]}
           style={styles.image}
-          contentFit="cover"
-          transition={300}
+          resizeMode="cover"
           onLoad={() => setImgLoaded(true)}
         />
         {!imgLoaded && SPS && (

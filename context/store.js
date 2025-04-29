@@ -1,6 +1,5 @@
 import React, { createContext, useReducer, useContext, useEffect } from 'react';
 import { Platform } from 'react-native';
-import * as SecureStore from 'expo-secure-store';
 
 // Types
 // export interface Product {
@@ -90,14 +89,16 @@ async function getItem(key) {
     const value = window.localStorage.getItem(key);
     return value === null ? null : value;
   }
-  return await SecureStore.getItemAsync(key);
+  // Removed: SecureStore import, so this will throw an error if called on native
+  throw new Error('SecureStore is not available on native platforms without expo-secure-store import');
 }
 async function setItem(key, value) {
   if (Platform.OS === 'web') {
     window.localStorage.setItem(key, value);
     return;
   }
-  await SecureStore.setItemAsync(key, value);
+  // Removed: SecureStore import, so this will throw an error if called on native
+  throw new Error('SecureStore is not available on native platforms without expo-secure-store import');
 }
 
 export function StoreProvider({ children }) {

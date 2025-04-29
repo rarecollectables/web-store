@@ -1,5 +1,4 @@
 import { View, Text, StyleSheet, Image as RNImage, ScrollView, Pressable, useWindowDimensions, FlatList, Platform, Animated } from 'react-native';
-import { Image as ExpoImage } from 'expo-image';
 import { FontAwesome } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState, useEffect, useRef, memo, useCallback } from 'react';
@@ -92,7 +91,7 @@ export default function ProductDetail() {
   }
 
   const MemoCarouselImage = memo(function CarouselImage({ item, style }) {
-    return <ExpoImage source={item} style={style} contentFit="cover" transition={300} />;
+    return <RNImage source={item} style={style} resizeMode="cover" />;
   });
 
   return (

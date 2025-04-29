@@ -1,6 +1,5 @@
 import React from 'react';
-import { View, Text, FlatList, Pressable, StyleSheet } from 'react-native';
-import { Image as ExpoImage } from 'expo-image';
+import { View, Text, FlatList, Pressable, StyleSheet, Image } from 'react-native';
 import { useStore } from '../../context/store';
 import { useRouter } from 'expo-router';
 import { PRODUCTS } from '../(data)/products';
@@ -43,7 +42,7 @@ export default function CartScreen() {
           }
           return (
             <View style={styles.itemRow}>
-              <ExpoImage source={item.image} style={styles.image} contentFit="cover" />
+              <Image source={item.image} style={styles.image} />
               <View style={styles.itemDetails}>
                 <Text style={styles.title}>{item.title}</Text>
                 <Text style={styles.price}>{`₤${price > 0 ? (price * item.quantity).toFixed(2) : 'N/A'}`}</Text>
