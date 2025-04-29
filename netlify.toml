@@ -1,11 +1,13 @@
 [build]
-  command = "npm run build"
+  command = "npm install --legacy-peer-deps && npm run build"
   publish = "web-build"
 
 [dev]
   command = "expo start --web"
 
 [build.environment]
+  NPM_FLAGS = "--legacy-peer-deps"
+  NPM_VERSION = "6.14.18"
   NODE_VERSION = "18"
 
 [functions]
