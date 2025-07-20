@@ -1,0 +1,64 @@
+{
+  "rules": [
+    {
+      "id": "ts-strict-mode",
+      "description": "Enable TypeScript strict mode for type safety and error prevention.",
+      "recommendation": "Set 'strict': true in tsconfig.json. Avoid using 'any' unless absolutely necessary.",
+      "severity": "error"
+    },
+    {
+      "id": "ts-no-explicit-any",
+      "description": "Disallow use of the 'any' type.",
+      "recommendation": "Use explicit, precise types. Replace 'any' with unknown or more specific types.",
+      "severity": "warning"
+    },
+    {
+      "id": "ts-no-implicit-any",
+      "description": "Disallow implicit 'any' types in function parameters and variables.",
+      "recommendation": "Annotate all parameters and variables with explicit types.",
+      "severity": "error"
+    },
+    {
+      "id": "ts-prefer-readonly",
+      "description": "Prefer 'readonly' for properties and variables that are never reassigned.",
+      "recommendation": "Use 'readonly' for arrays, objects, and class properties that should not change after initialization.",
+      "severity": "warning"
+    },
+    {
+      "id": "ts-explicit-module-boundary-types",
+      "description": "Require explicit return and argument types on exported functions and classes.",
+      "recommendation": "Annotate all exported functions, methods, and class properties with explicit types.",
+      "severity": "warning"
+    },
+    {
+      "id": "ts-no-unused-vars",
+      "description": "Disallow unused variables, parameters, and imports.",
+      "recommendation": "Remove unused variables, parameters, and imports to keep code clean.",
+      "severity": "warning"
+    },
+    {
+      "id": "ts-no-non-null-assertion",
+      "description": "Disallow non-null assertions (!).",
+      "recommendation": "Use proper type narrowing and checks instead of non-null assertions.",
+      "severity": "warning"
+    },
+    {
+      "id": "ts-consistent-type-imports",
+      "description": "Use 'import type' for type-only imports.",
+      "recommendation": "Use 'import type { Foo } from ...' for importing only types, to improve clarity and tree-shaking.",
+      "severity": "info"
+    },
+    {
+      "id": "ts-no-var-requires",
+      "description": "Disallow use of CommonJS 'require' in TypeScript files.",
+      "recommendation": "Use ES6 'import' syntax instead of 'require'.",
+      "severity": "error"
+    },
+    {
+      "id": "ts-member-ordering",
+      "description": "Enforce consistent member ordering in classes and interfaces.",
+      "recommendation": "Order class/interface members as: public static, public instance, protected static, protected instance, private static, private instance.",
+      "severity": "info"
+    }
+  ]
+}

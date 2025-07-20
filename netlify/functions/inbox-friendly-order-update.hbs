@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Your Order Update</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+      .container { max-width: 600px; margin: 0 auto; }
+      .content { padding: 20px; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="content">
+        <p>Hi {{customerName}},</p>
+        
+        <p>I wanted to let you know that your order #{{orderNumber}} is on its way to you now.</p>
+        
+        <p>You can track your package with this tracking number: <strong>{{trackingCode}}</strong></p>
+        
+        <p>If you have any questions about your order or need any help, please don't hesitate to reply to this email directly.</p>
+        
+        <p>Thanks for shopping with us!</p>
+        
+        <p>Best regards,<br>
+        Sarah<br>
+        Rare Collectables</p>
+      </div>
+    </div>
+  </body>
+</html>
