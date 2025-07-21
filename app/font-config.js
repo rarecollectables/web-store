@@ -11,6 +11,20 @@ const FONT_TIMEOUT = 30000; // 30 seconds - much longer timeout
 // Flag to completely bypass font loading on web if needed
 const BYPASS_FONT_LOADING = true;
 
+// Immediately apply the bypass if we're in a web environment
+if (BYPASS_FONT_LOADING && typeof window !== 'undefined') {
+  // Create a mock FontFaceObserver that immediately resolves
+  window.FontFaceObserver = function(family, descriptors) {
+    return {
+      load: function() {
+        console.log(`Mock font loading for: ${family}`);
+        return Promise.resolve();
+      }
+    };
+  };
+  console.log('Font loading completely bypassed for web (immediate)');
+}
+
 /**
  * Load application fonts with extended timeout
  * This function can be called during app initialization
