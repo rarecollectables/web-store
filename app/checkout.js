@@ -393,7 +393,10 @@ export default function CheckoutScreen() {
 
   // Coupon validation handler
   const handleApplyCoupon = async () => {
-    if (!coupon) return;
+    if (!coupon || coupon.trim() === '') {
+      setCouponStatus({ valid: false, error: 'Please enter a coupon code.' });
+      return;
+    }
     setApplyingCoupon(true);
     setCouponStatus(null);
     try {
