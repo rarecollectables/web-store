@@ -77,19 +77,20 @@ console.log(
     'MISSING - Please add EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY to your .env file'
 );
 
-// PayPal client ID - replace with your actual client ID from PayPal Developer Dashboard
-const PAYPAL_CLIENT_ID = process.env.EXPO_PUBLIC_PAYPAL_CLIENT_ID || 
-  (Constants?.expoConfig?.extra?.PAYPAL_CLIENT_ID) || 
-  (Constants?.manifest?.extra?.PAYPAL_CLIENT_ID) || 
-  // Fallback to sandbox client ID for local development only
-  (process.env.NODE_ENV === 'development' ? process.env.EXPO_PUBLIC_PAYPAL_CLIENT_ID  : null);
+// PayPal client ID - uses different keys for production and sandbox environments
+const PAYPAL_CLIENT_ID = process.env.NODE_ENV === 'production'
+  ? process.env.EXPO_PUBLIC_PAYPAL_LIVE_CLIENT_ID
+  : process.env.EXPO_PUBLIC_PAYPAL_SANDBOX_CLIENT_ID;
 
-// Log PayPal client ID status for debugging (without revealing the full ID)
+// Log PayPal client ID status for debugging
 console.log(
-  'PayPal client ID status:', 
+  `PayPal environment: ${process.env.NODE_ENV || 'development'}`
+);
+console.log(
+  'PayPal Client ID status:', 
   PAYPAL_CLIENT_ID ? 
     `Available (starts with: ${PAYPAL_CLIENT_ID.substring(0, 7)}...)` : 
-    'MISSING - Please add EXPO_PUBLIC_PAYPAL_CLIENT_ID to your .env file'
+    'MISSING - Please check your .env file and production environment variables.'
 );
 
 // Initialize Stripe
@@ -392,34 +393,23 @@ export default function CheckoutScreen() {
 
   // Coupon validation handler
   const handleApplyCoupon = async () => {
-    if (!coupon.trim()) return;
-    
+    if (!coupon) return;
     setApplyingCoupon(true);
     setCouponStatus(null);
-    
     try {
       const response = await fetch('/.netlify/functions/validate-coupon', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-                        body: JSON.stringify({ coupon: coupon.trim() }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ coupon }),
       });
-
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Invalid coupon code');
+      if (response.ok && data.valid) {
+        setCouponStatus({ valid: true, discount: data.discount, promo: data.promo });
+      } else {
+        setCouponStatus({ valid: false, error: data.error || 'Invalid or expired coupon code.' });
       }
-
-      setCouponStatus({
-        valid: true,
-        message: data.promo?.coupon?.name || 'Coupon applied!',
-        discount: data.discount,
-      });
-
-    } catch (error) {
-      setCouponStatus({ valid: false, error: error.message });
+    } catch (err) {
+      setCouponStatus({ valid: false, error: err.message || 'Failed to validate coupon.' });
     } finally {
       setApplyingCoupon(false);
     }
