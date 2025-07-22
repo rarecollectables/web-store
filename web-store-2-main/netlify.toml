@@ -1,0 +1,46 @@
+[build]
+  base = "/"
+  publish = "dist"
+  
+  [build.environment]
+    NODE_VERSION = "18"
+    NPM_VERSION = "8.19.3"
+    STRIPE_SECRET_KEY = "@stripe_secret_key"
+    SUCCESS_URL = "https://rarecollectables.co.uk/confirmation"
+    CANCEL_URL = "https://rarecollectables.co.uk/cart"
+
+[functions]
+included_files = ["netlify/functions/order-update-email.hbs"]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+  [functions.node_version]
+    version = "18"
+
+  [functions.build]
+    command = "yarn install && yarn run build"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    X-XSS-Protection = "1; mode=block"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    # Updated CSP: Allow fonts from Google Fonts and Stripe, allow images from Google Tag Manager
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://m.stripe.network https://*.stripe.com https://api.hcaptcha.com https://js.hcaptcha.com https://www.googletagmanager.com https://www.google-analytics.com https://*.clarity.ms https://googleads.g.doubleclick.net https://www.googleadservices.com https://region1.analytics.google.com https://pagead2.googlesyndication.com https://stats.g.doubleclick.net; style-src 'self' 'unsafe-inline' https://*.googleapis.com/ https://*.stripe.com; img-src 'self' data: https://fhybeyomiivepmlrampr.supabase.co https://*.stripe.com https://www.google.com https://*.google.com https://*.google.co.uk https://googleads.g.doubleclick.net https://stats.g.doubleclick.net https://google.com https://google.co.uk https://www.googletagmanager.com https://*.clarity.ms https://www.googleadservices.com https://*.analytics.google.com https://pagead2.googlesyndication.com; connect-src 'self' https://api.rarecollectables.co.uk https://fhybeyomiivepmlrampr.supabase.co https://*.stripe.com https://ipapi.co https://*.analytics.google.com https://*.google-analytics.com https://*.google.com https://*.clarity.ms https://stats.g.doubleclick.net https://google.com https://google.co.uk https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://www.googleadservices.com; font-src 'self' https://fonts.gstatic.com https://*.stripe.com; frame-src 'self' https://www.youtube.com https://*.stripe.com https://www.googletagmanager.com https://td.doubleclick.net; object-src 'none'; media-src 'self' https://fhybeyomiivepmlrampr.supabase.co data:; child-src 'self' https://www.youtube.com https://*.stripe.com; worker-src 'self' blob:;"
+
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
+    Access-Control-Allow-Headers = "Content-Type, Authorization"
+    Access-Control-Allow-Credentials = "true"
+    Access-Control-Max-Age = "86400"
+
+[dev]
+  command = "expo start --web"

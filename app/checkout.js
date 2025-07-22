@@ -403,7 +403,7 @@ export default function CheckoutScreen() {
         headers: {
           'Content-Type': 'application/json',
         },
-                        body: JSON.stringify({ coupon: coupon.trim().toUpperCase() }),
+                        body: JSON.stringify({ coupon: coupon.trim() }),
       });
 
       const data = await response.json();

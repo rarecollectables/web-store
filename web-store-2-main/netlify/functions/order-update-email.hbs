@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Your Order is on the Way!</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <style>
+      body { font-family: Arial, sans-serif; background: #f7f7f7; margin: 0; padding: 0; }
+      .container { max-width: 600px; margin: 32px auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px #e5d6c3; }
+      .header { background: #bfa054; color: #fff; padding: 24px; text-align: center; }
+      .logo { max-width: 120px; margin-bottom: 12px; }
+      .content { padding: 32px 24px 24px 24px; }
+      .order-summary { margin-bottom: 24px; }
+      .order-table { width: 100%; border-collapse: collapse; }
+      .order-table th, .order-table td { padding: 8px 4px; border-bottom: 1px solid #eee; }
+      .order-table th { text-align: left; color: #bfa054; }
+      .total-row td { font-weight: bold; }
+      .tracking { margin: 24px 0; padding: 16px; background: #f9f3e8; border-radius: 8px; }
+      .related { margin-top: 32px; }
+      .related-title { color: #bfa054; font-size: 18px; margin-bottom: 12px; }
+      .related-products { display: flex; gap: 12px; }
+      .related-product { width: 120px; text-align: center; }
+      .related-product img { width: 100%; border-radius: 8px; }
+      .footer { background: #f2ead3; color: #888; padding: 18px; text-align: center; font-size: 13px; }
+      @media (max-width: 600px) {
+        .container, .content { padding: 12px !important; }
+        .related-products { flex-direction: column; gap: 18px; }
+        .related-product { width: 100%; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <div style="font-size: 22px; font-weight: bold; letter-spacing: 1px;">Rare Collectables</div>
+        <h1>Your order is on the way!</h1>
+      </div>
+      <div class="content">
+        <p>Hi <b>{{customerName}}</b>,</p>
+        <p>We're excited to let you know your order is on its way!</p>
+        <div class="order-summary">
+          <h2 style="color:#bfa054;">Order Summary</h2>
+          <table class="order-table">
+            <thead>
+              <tr>
+                <th>Product</th><th>Image</th><th>Qty</th><th>Price</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{#each items}}
+              <tr>
+                <td>{{name}}</td>
+                <td>
+                  {{#if image}}
+                    <img src="{{image}}" alt="{{name}}" style="max-width: 48px; max-height: 48px; border-radius: 6px;"/>
+                  {{else}}
+                    &mdash;
+                  {{/if}}
+                </td>
+                <td>{{quantity}}</td>
+                <td>£{{price}}</td>
+              </tr>
+              {{/each}}
+              <tr class="total-row">
+                <td colspan="2">Total</td>
+                <td>£{{total}}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="tracking">
+          <b>Tracking Code:</b> <a href="{{trackingUrl}}" style="color:#bfa054;">{{trackingCode}}</a>
+        </div>
+        <div>
+          <b>Shipping to:</b><br/>
+          {{{shippingAddress}}}
+        </div>
+        <div class="related">
+          <div class="related-title">You may also like</div>
+          <div class="related-products">
+            {{#each relatedProducts}}
+            <div class="related-product">
+              <a href="{{url}}"><img src="{{image}}" alt="{{name}}"/></a>
+              <div style="font-size:14px; line-height:1.2; word-break:break-word;">{{name}}</div>
+{{#if price}}
+  <div style="color:#888; font-size:12px; margin-top:2px;">£{{price}}</div>
+{{/if}}
+            </div>
+            {{/each}}
+          </div>
+        </div>
+        <p style="margin-top:32px;">
+          If you have any questions, just reply to this email or <a href="mailto:rarecollectablessales@gmail.com" style="color:#bfa054;">contact our support team</a>.
+        </p>
+      </div>
+      <div class="footer">
+        &copy; {{year}} Rare Collectables &mdash; Thank you for shopping with us!
+      </div>
+    </div>
+  </body>
+</html>

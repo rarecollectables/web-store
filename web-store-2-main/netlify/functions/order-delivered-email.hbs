@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Your Order Has Been Delivered!</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <style>
+      body { font-family: Arial, sans-serif; background: #f7f7f7; margin: 0; padding: 0; }
+      body {
+        font-family: 'Segoe UI', Arial, sans-serif;
+        background: #f6f4f1;
+        margin: 0;
+        padding: 0;
+        color: #222;
+      }
+      .container {
+        max-width: 600px;
+        margin: 36px auto;
+        background: #fff;
+        border-radius: 18px;
+        overflow: hidden;
+        box-shadow: 0 4px 18px #e5d6c3;
+        border: 2px solid #f3e7d9;
+      }
+      .header {
+        background: linear-gradient(90deg, #bfa054 60%, #e5d6c3 100%);
+        color: #fff;
+        padding: 32px 24px 18px 24px;
+        text-align: center;
+      }
+      .logo {
+        max-width: 120px;
+        margin-bottom: 12px;
+      }
+      .content {
+        padding: 36px 28px 18px 28px;
+      }
+      .order-summary {
+        margin-bottom: 32px;
+        background: #f7f3ea;
+        border-radius: 10px;
+        padding: 18px 16px 10px 16px;
+        border: 1.5px solid #e5d6c3;
+        box-shadow: 0 2px 8px #e5d6c211;
+      }
+      .order-summary h2 {
+        margin-top: 0;
+        margin-bottom: 12px;
+        color: #bfa054;
+        font-size: 21px;
+      }
+      .order-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .order-table th, .order-table td {
+        padding: 9px 4px;
+        border-bottom: 1px solid #eee;
+      }
+      .order-table th {
+        text-align: left;
+        color: #bfa054;
+        font-size: 15px;
+      }
+      .total-row td {
+        font-weight: bold;
+      }
+      .delivered {
+        margin: 28px 0 18px 0;
+        padding: 18px;
+        background: #e6f9e8;
+        border-radius: 10px;
+        border: 1.5px solid #bfa05444;
+        font-size: 15px;
+      }
+      .related {
+        margin-top: 40px;
+        background: linear-gradient(90deg, #f7f3ea 0%, #f3e7d9 100%);
+        border-radius: 16px;
+        border: 2px solid #e5d6c3;
+        box-shadow: 0 2px 16px #e5d6c355;
+        padding: 32px 24px 24px 24px;
+      }
+      .related-title {
+        color: #bfa054;
+        font-size: 22px;
+        font-weight: bold;
+        margin-bottom: 18px;
+        letter-spacing: 1px;
+        text-align: center;
+      }
+      .related-products { display: flex; gap: 12px; }
+      .related-product { width: 120px; text-align: center; margin: 0 10px; }
+      .related-product img { width: 100%; border-radius: 8px; }
+      
+      .related-product:hover {
+        box-shadow: 0 6px 22px #bfa05444;
+        transform: translateY(-3px) scale(1.04);
+      }
+      .related-product img {
+        display: block;
+        margin: 0 auto 18px auto;
+        width: auto;
+        max-width: 160px;
+        max-height: 160px;
+        border-radius: 12px;
+        background: none;
+        border: none;
+        object-fit: cover;
+        box-shadow: 0 6px 24px #bfa05422, 0 1.5px 6px #e5d6c244;
+        transition: box-shadow 0.2s, transform 0.2s;
+      }
+      .related-product img:hover {
+        box-shadow: 0 10px 32px #bfa05433, 0 2px 8px #e5d6c277;
+        transform: scale(1.04);
+      }
+      .related-product a {
+        text-decoration: none;
+        color: inherit;
+      }
+      .related-product-name {
+        font-size: 12px;
+        color: #bfa054;
+        font-weight: 600;
+        margin: 8px 0 8px 0;
+        text-decoration: none;
+        display: block;
+        transition: color 0.2s;
+        word-break: break-word;
+        white-space: normal;
+        line-height: 1.4;
+      }
+      .related-product-name:hover {
+        color: #a88c36;
+      }
+      .related-product-price {
+        color: #444;
+        font-size: 15px;
+        margin-bottom: 7px;
+        font-weight: 500;
+        margin-top: 2px;
+        text-align: center;
+        display: block;
+      }
+      .promo-offer {
+        background: linear-gradient(90deg, #f9efd6 0%, #ffe8b2 100%);
+        border-radius: 14px;
+        border: 2px dashed #bfa054;
+        box-shadow: 0 2px 12px #e5d6c244;
+        margin: 38px 0 18px 0;
+        padding: 26px 14px 18px 14px;
+        text-align: center;
+      }
+      .promo-title {
+        font-size: 20px;
+        color: #bfa054;
+        font-weight: bold;
+        margin-bottom: 8px;
+      }
+      .promo-desc {
+        font-size: 15px;
+        color: #444;
+        margin-bottom: 10px;
+      }
+      .promo-code {
+        display: inline-block;
+        background: #fff6d6;
+        color: #bfa054;
+        font-size: 22px;
+        font-weight: bold;
+        letter-spacing: 2px;
+        border-radius: 8px;
+        border: 2px solid #bfa054;
+        padding: 8px 24px;
+        margin-bottom: 8px;
+        box-shadow: 0 1px 8px #e5d6c244;
+      }
+      .promo-fineprint {
+        font-size: 12px;
+        color: #a88c36;
+        margin-top: 8px;
+      }
+      .footer { background: #f2ead3; color: #888; padding: 18px; text-align: center; font-size: 13px; }
+      @media (max-width: 600px) {
+        .container, .content { padding: 12px !important; }
+        .related-products { flex-direction: column; gap: 18px; }
+        .related-product { width: 100%; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <img src="https://fhybeyomiivepmlrampr.supabase.co/storage/v1/object/public/utils//rare-collectables-horizontal-logo.png" alt="Rare Collectables" class="logo"/>
+        <h1>Your order has been delivered!</h1>
+      </div>
+      <div class="content">
+        <p>Hi <b>{{customerName}}</b>,</p>
+        <p>We're happy to let you know your order <b>#{{orderNumber}}</b> has been <span style="color:green;font-weight:bold;">delivered</span>!</p>
+        <div class="order-summary">
+          <h2 style="color:#bfa054;">Order Summary</h2>
+          <table class="order-table">
+            <thead>
+              <tr>
+                <th>Product</th><th>Image</th><th>Qty</th><th>Price</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{#each items}}
+              <tr>
+                <td>{{name}}</td>
+                <td>
+                  {{#if image}}
+                    <img src="{{image}}" alt="{{name}}" style="max-width: 48px; max-height: 48px; border-radius: 6px;"/>
+                  {{else}}
+                    &mdash;
+                  {{/if}}
+                </td>
+                <td>{{quantity}}</td>
+                <td>£{{price}}</td>
+              </tr>
+              {{/each}}
+              <tr class="total-row">
+                <td colspan="2">Total</td>
+                <td>£{{total}}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="delivered">
+          <b>Delivered to:</b><br/>
+          {{{shippingAddress}}}
+        </div>
+
+        <div class="promo-offer">
+          <div class="promo-title">🎉 Get <b>50% OFF</b> your next purchase!</div>
+          <div class="promo-desc">Use code below at checkout:</div>
+          <div class="promo-code">RCLOVER50</div>
+          <div class="promo-fineprint">*Valid for a limited time only. One use per customer.</div>
+        </div>
+        <div class="related">
+          <div class="related-title">Similar Collectables You'd Love 💎❤️ </div>
+          <table class="related-products-table" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin:0 auto 0 auto; border:none; border-collapse:collapse; table-layout:fixed; width:100%;">
+            <tr>
+              {{#each relatedProducts}}
+              <td class="related-product-td" style="width:25%;max-width:140px;padding:0 8px 18px 8px;vertical-align:top;word-break:break-word;">
+                <a href="{{url}}" target="_blank" rel="noopener noreferrer">
+                  <img src="{{image}}" alt="{{name}}" style="width:100%;max-width:120px;height:auto;border-radius:8px;display:block;margin:0 auto 8px auto;">
+                </a>
+                <a href="{{url}}" class="related-product-name" target="_blank" rel="noopener noreferrer" style="font-size:13px;color:#bfa054;font-weight:600;display:block;margin-bottom:6px;word-break:break-word;text-align:center;">{{name}}</a>
+                <div class="related-product-price" style="font-size:13px;color:#444;margin-bottom:4px;text-align:center;min-height:18px;">£{{#if price}}{{price}}{{else}}—{{/if}}</div>
+              </td>
+              {{/each}}
+            </tr>
+          </table>
+          <style>
+            @media only screen and (max-width: 600px) {
+              .related-product-td {
+                width: 48% !important;
+                max-width: 48% !important;
+                display: inline-block !important;
+                box-sizing: border-box;
+                vertical-align: top !important;
+              }
+              .related-products-table tr {
+                display: block !important;
+              }
+            }
+          </style>
+        </div>
+        <p style="margin-top:32px;">
+          If you have any questions, just reply to this email or <a href="mailto:rarecollectablessales@gmail.com" style="color:#bfa054;">contact our support team</a>.
+        </p>
+      </div>
+      <div class="footer">
+        &copy; {{year}} Rare Collectables &mdash; Thank you for shopping with us!
+      </div>
+    </div>
+  </body>
+</html>
