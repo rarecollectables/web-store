@@ -160,10 +160,7 @@ const AddressAutocomplete = ({
   
   return (
     <View style={[styles.container, style]}>
-      <Text style={styles.label}>
-        {label}
-        {required && <Text style={styles.required}> *</Text>}
-      </Text>
+      {/* Label removed as per user request */}
       
       <View style={[
         styles.inputContainer,
@@ -264,6 +261,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     paddingHorizontal: 12,
     backgroundColor: colors.white,
+    height: 48, // Ensure consistent height with FormField
   },
   inputContainerFocused: {
     borderColor: colors.gold,
@@ -277,6 +275,7 @@ const styles = StyleSheet.create({
     height: 48,
     fontSize: 16,
     color: colors.darkText,
+    paddingVertical: 0, // Remove default padding for better alignment
   },
   errorText: {
     color: colors.error,

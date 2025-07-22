@@ -206,7 +206,7 @@ export default function HomeScreen() {
     // Always show the promo bubble on every load
     const seen = typeof window !== 'undefined' && window.localStorage && window.localStorage.getItem('springPromoSeen');
     if (!seen) {
-      setShowPromo(true);
+      // setShowPromo(true);
       setShowDiscountBubble(true);
     } else {
       setShowDiscountBubble(true);

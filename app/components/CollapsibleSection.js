@@ -23,7 +23,7 @@ export default function CollapsibleSection({ title, children, initiallyCollapsed
     overflow: 'hidden',
     maxHeight: animation.interpolate({
       inputRange: [0, 1],
-      outputRange: [0, 500], // 500px max expanded height
+      outputRange: [0, 1000], // 1000px max expanded height to ensure all content is visible
     }),
     opacity: animation,
   };

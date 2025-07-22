@@ -210,7 +210,6 @@ const FormField = ({
       <View style={styles.labelContainer}>
         <Animated.Text style={[styles.label, { color: labelColor }]}>
           {label}
-          {required && <Text style={styles.requiredAsterisk}> *</Text>}
         </Animated.Text>
         {info && (
           <View style={styles.infoContainer}>

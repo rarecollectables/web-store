@@ -1,4 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, createRef } from 'react';
+// Add a try-catch block around any potential font loading code
+try {
+  // Disable fontfaceobserver timeout by setting a very high value
+  window.FontFaceObserver = window.FontFaceObserver || {};
+  window.FontFaceObserver.prototype.load = function() {
+    return Promise.resolve();
+  };
+} catch (error) {
+  console.warn('Error handling font loading:', error);
+}
 import { 
   View, 
   Text, 
@@ -30,6 +40,7 @@ import { CardElement, useElements, useStripe, Elements } from '@stripe/react-str
 import { loadStripe } from '@stripe/stripe-js';
 import Constants from 'expo-constants';
 import { FontAwesome } from '@expo/vector-icons';
+import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
 
 // Haptic feedback utility that's safe for web (no-op on web)
 const triggerHaptic = (type) => {
@@ -66,6 +77,21 @@ console.log(
     'MISSING - Please add EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY to your .env file'
 );
 
+// PayPal client ID - replace with your actual client ID from PayPal Developer Dashboard
+const PAYPAL_CLIENT_ID = process.env.EXPO_PUBLIC_PAYPAL_CLIENT_ID || 
+  (Constants?.expoConfig?.extra?.PAYPAL_CLIENT_ID) || 
+  (Constants?.manifest?.extra?.PAYPAL_CLIENT_ID) || 
+  // Fallback to sandbox client ID for local development only
+  (process.env.NODE_ENV === 'development' ? process.env.EXPO_PUBLIC_PAYPAL_CLIENT_ID  : null);
+
+// Log PayPal client ID status for debugging (without revealing the full ID)
+console.log(
+  'PayPal client ID status:', 
+  PAYPAL_CLIENT_ID ? 
+    `Available (starts with: ${PAYPAL_CLIENT_ID.substring(0, 7)}...)` : 
+    'MISSING - Please add EXPO_PUBLIC_PAYPAL_CLIENT_ID to your .env file'
+);
+
 // Initialize Stripe
 const stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY);
 
@@ -99,8 +125,7 @@ export default function CheckoutScreen() {
   const [contact, setContact] = useState({ name: '', email: '' });
   const [address, setAddress] = useState({ 
     country: 'United Kingdom', 
-    firstName: '', 
-    lastName: '', 
+    name: '', 
     line1: '', 
     apartment: '', 
     city: '', 
@@ -123,7 +148,8 @@ export default function CheckoutScreen() {
   
   // Selected payment method
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('card');
-  const [preferredPaymentMethodId, setPreferredPaymentMethodId] = useState('pmc_1R4UBCD5NhzI6POJS7XmQkBP');
+  const [preferredPaymentMethodId, setPreferredPaymentMethodId] = useState(null);
+  const [expressCheckoutMethod, setExpressCheckoutMethod] = useState(null);
   
   // Form state
   const [debounceTimer, setDebounceTimer] = useState(null);
@@ -157,9 +183,10 @@ export default function CheckoutScreen() {
   const [isDesktop, setIsDesktop] = useState(false);
   const [layoutSize, setLayoutSize] = useState('');
 
-  // Animation refs
+  // Refs for animations and scrolling
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
+  const paymentSectionRef = useRef(null);
 
   useEffect(() => {
     // Update layout when screen dimensions change
@@ -371,27 +398,28 @@ export default function CheckoutScreen() {
     setCouponStatus(null);
     
     try {
-      // Simulate coupon validation - in a real app, this would call an API
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      // Example coupon logic - replace with actual validation
-      if (coupon.toLowerCase() === 'welcome10') {
-        setCouponStatus({ 
-          valid: true, 
-          discount: { type: 'percentage', value: 10 },
-          message: '10% discount applied!' 
-        });
-      } else if (coupon.toLowerCase() === 'freeship') {
-        setCouponStatus({ 
-          valid: true, 
-          discount: { type: 'shipping', value: 'free' },
-          message: 'Free shipping applied!' 
-        });
-      } else {
-        setCouponStatus({ valid: false, error: 'Invalid coupon code' });
+      const response = await fetch('/.netlify/functions/validate-coupon', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+                        body: JSON.stringify({ coupon: coupon.trim().toUpperCase() }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Invalid coupon code');
       }
+
+      setCouponStatus({
+        valid: true,
+        message: data.promo?.coupon?.name || 'Coupon applied!',
+        discount: data.discount,
+      });
+
     } catch (error) {
-      setCouponStatus({ valid: false, error: 'Error validating coupon' });
+      setCouponStatus({ valid: false, error: error.message });
     } finally {
       setApplyingCoupon(false);
     }
@@ -427,14 +455,9 @@ export default function CheckoutScreen() {
     }
     
     // Validate name fields
-    if (!address.firstName || address.firstName.length < 2) {
-      newErrors.firstName = 'First name is required';
-      missingFields.push('firstName');
-    }
-    
-    if (!address.lastName || address.lastName.length < 2) {
-      newErrors.lastName = 'Last name is required';
-      missingFields.push('lastName');
+    if (!address.name || address.name.length < 2) {
+      newErrors.name = 'Name is required';
+      missingFields.push('name');
     }
     
     // Only show errors when submitting the form
@@ -515,7 +538,7 @@ export default function CheckoutScreen() {
     const discount = getDiscountAmount();
     const shipping = shippingOption === 'express' ? 4.99 : 0;
     
-    return (subtotal - discount + shipping).toFixed(2);
+    return subtotal - discount + shipping;
   };
   
   // Function to get dynamic styles based on layout size
@@ -601,431 +624,295 @@ export default function CheckoutScreen() {
     }
   }, []);
 
-  return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={[styles.contentContainer, { paddingBottom: 80 }]}
-      keyboardShouldPersistTaps="handled"
-    >
-      <View style={[styles.header, dynamicStyles.dynamicContainer]}>
-        <Link href="/(tabs)/" style={styles.logoLink}>
-          <Image
-            source={require('../assets/images/rare-collectables-logo.png')}
-            style={styles.brandLogo}
-            resizeMode="contain"
-          />
-        </Link>
-      </View>
-
-      {cart.length === 0 ? (
-        <FadeIn duration={500}>
-          <View style={styles.emptyCartContainer}>
-            <Text style={styles.emptyCartText}>Your cart is empty</Text>
-            <AnimatedButton
-              style={styles.continueShopping}
-              onPress={() => router.replace('/(tabs)/shop')}
-              accessibilityLabel="Continue shopping"
-            >
-              Continue Shopping
-            </AnimatedButton>
-          </View>
-        </FadeIn>
-      ) : stripeLoading ? (
-        <View style={styles.loadingContainer}>
-          <LoadingIndicator text="Preparing checkout..." />
+    return (
+    <>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={[styles.contentContainer, { paddingBottom: 120 }]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={true}
+      >
+        <View style={[styles.header, dynamicStyles.dynamicContainer]}>
+          <Link href="/(tabs)/" style={styles.logoLink}>
+            <Image
+              source={require('../assets/images/rare-collectables-logo.png')}
+              style={styles.brandLogo}
+              resizeMode="contain"
+            />
+          </Link>
         </View>
-      ) : stripeError ? (
-        <FadeIn duration={500}>
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorTitle}>Payment Error</Text>
-            <Text>{stripeError}</Text>
-            <AnimatedButton
-              style={[styles.continueShopping, { marginTop: 20 }]}
-              onPress={() => router.replace('/(tabs)/shop')}
-              accessibilityLabel="Return to shop"
-            >
-              Return to Shop
-            </AnimatedButton>
+
+        {cart.length === 0 ? (
+          <FadeIn duration={500}>
+            <View style={styles.emptyCartContainer}>
+              <Text style={styles.emptyCartText}>Your cart is empty</Text>
+              <AnimatedButton
+                style={styles.continueShopping}
+                onPress={() => router.replace('/(tabs)/shop')}
+                accessibilityLabel="Continue shopping"
+              >
+                Continue Shopping
+              </AnimatedButton>
+            </View>
+          </FadeIn>
+        ) : stripeLoading ? (
+          <View style={styles.loadingContainer}>
+            <LoadingIndicator text="Preparing checkout..." />
           </View>
-        </FadeIn>
-      ) : (
-        <Elements stripe={stripe}>
-          <Animated.View 
-            style={[
-              styles.checkoutContainer, 
-              isDesktop && styles.checkoutContainerDesktop,
-              { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
-            ]}
-          >
-            {/* Left Column - Customer Information and Payment */}
-            <View style={[styles.leftColumn, isDesktop && styles.leftColumnDesktop]}>
-              {/* Order Reservation Timer */}
-              <View style={styles.reservationTimerContainer}>
-                <Text style={styles.reservationTimerText}>
-                  <FontAwesome name="clock-o" size={16} color={colors.gold} /> Your order is reserved for {reservationMinutes}:{reservationSeconds < 10 ? `0${reservationSeconds}` : reservationSeconds} minutes
-                </Text>
-              </View>
-                
-              {/* Express Checkout Options */}
-              <View style={styles.expressCheckoutContainer}>
-                <Text style={styles.expressCheckoutTitle}>Express checkout</Text>
-                <View style={styles.expressPaymentRow}>
-                  <Pressable style={styles.expressPaymentButton}>
-                    <Text style={styles.paypalText}>PayPal</Text>
-                  </Pressable>
-                  <Pressable style={styles.expressPaymentButton}>
-                    <Text style={styles.applePayText}>Apple Pay</Text>
-                  </Pressable>
-                  <Pressable style={styles.expressPaymentButton}>
-                    <Text style={styles.googlePayText}>G Pay</Text>
-                  </Pressable>
+        ) : stripeError ? (
+          <FadeIn duration={500}>
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorTitle}>Payment Error</Text>
+              <Text>{stripeError}</Text>
+              <AnimatedButton
+                style={[styles.continueShopping, { marginTop: 20 }]}
+                onPress={() => router.replace('/(tabs)/shop')}
+                accessibilityLabel="Return to shop"
+              >
+                Return to Shop
+              </AnimatedButton>
+            </View>
+          </FadeIn>
+        ) : (
+          <Elements stripe={stripePromise}>
+            <Animated.View 
+              style={[
+                styles.checkoutContainer, 
+                isDesktop && styles.checkoutContainerDesktop,
+                { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
+              ]}
+            >
+              {/* Left Column - Customer Information and Payment */}
+              <View style={[styles.leftColumn, isDesktop && styles.leftColumnDesktop]}>
+                {/* Order Reservation Timer */}
+                <View style={styles.reservationTimerContainer}>
+                  <Text style={styles.reservationTimerText}>
+                    <FontAwesome name="clock-o" size={16} color={colors.gold} /> Your order is reserved for {reservationMinutes}:{reservationSeconds < 10 ? `0${reservationSeconds}` : reservationSeconds} minutes
+                  </Text>
                 </View>
-                <View style={styles.orDivider}>
-                  <View style={styles.dividerLine} />
-                  <Text style={styles.orText}>OR</Text>
-                  <View style={styles.dividerLine} />
-                </View>
-              </View>
-              
-              {/* Contact Information */}
-              <CollapsibleSection title="Contact Information" initiallyCollapsed={false}>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Contact</Text>
-                  <TouchableOpacity accessible={true} accessibilityLabel="Log in to your account" accessibilityRole="button">
-                    <Text style={styles.loginLink}>Log in</Text>
-                  </TouchableOpacity>
-                </View>
-                
-                <FormField
-                  label="Email"
-                  placeholder="Email address"
-                  value={contact.email}
-                  onChangeText={(text) => handleInputChange('contact', 'email', text)}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoComplete="email"
-                  textContentType="emailAddress"
-                  error={errors.email}
-                  required={true}
-                  validator={validators.email}
-                  icon="envelope"
-                  id="field-email"
-                />
-                
-                <View style={styles.checkboxRow}>
-                  <Switch
-                    value={smsMarketing}
-                    onValueChange={setSmsMarketing}
-                    trackColor={{ false: '#d0d0d0', true: colors.gold }}
-                    thumbColor={colors.white}
-                  />
-                  <Text style={styles.checkboxLabel}>Email me with news and offers</Text>
-                </View>
-              </CollapsibleSection>
-              
-              {/* Delivery Information */}
-              <CollapsibleSection title="Delivery Information" initiallyCollapsed={false}>
-                <Text style={styles.sectionTitle}>Delivery</Text>
-                
-                <View style={styles.countrySelectContainer}>
-                  <Text style={styles.countrySelectText}>{address.country}</Text>
-                  <FontAwesome name="chevron-down" size={12} color={colors.grey} />
-                </View>
-                
-                <View style={styles.formRow}>
-                  <FormField
-                    label="First Name"
-                    placeholder="First name"
-                    value={address.firstName}
-                    onChangeText={(text) => handleInputChange('address', 'firstName', text)}
-                    autoComplete="given-name"
-                    textContentType="givenName"
-                    error={errors.firstName}
-                    required={true}
-                    validator={validators.name}
-                    icon="user"
-                    id="field-firstName"
-                  />
-                  <FormField
-                    label="Last name"
-                    placeholder="Last name"
-                    value={address.lastName}
-                    onChangeText={(text) => handleInputChange('address', 'lastName', text)}
-                    autoComplete="family-name"
-                    textContentType="familyName"
-                    error={errors.lastName}
-                    required={true}
-                    validator={validators.name}
-                    style={styles.inputHalf}
-                    id="field-lastName"
-                  />
-                </View>
-                
-                <AddressAutocomplete
-                  value={address.postcode}
-                  onSelect={handleAddressSelect}
-                  error={errors.postcode}
-                />
-                
-                <FormField
-                  label="Address Line 1"
-                  placeholder="Address Line 1"
-                  value={address.address1}
-                  onChangeText={(text) => handleInputChange('address', 'address1', text)}
-                  error={errors.address1}
-                  required={true}
-                  id="field-address1"
-                  autoComplete="street-address"
-                  textContentType="streetAddressLine1"
-                />
-                
-                <FormField
-                  label="Address Line 2"
-                  placeholder="Address Line 2 (optional)"
-                  value={address.address2}
-                  onChangeText={(text) => handleInputChange('address', 'address2', text)}
-                  error={errors.address2}
-                  required={false}
-                  id="field-address2"
-                  textContentType="streetAddressLine2"
-                />
-                
-                <FormField
-                  label="City"
-                  placeholder="City"
-                  value={address.city}
-                  onChangeText={(text) => handleInputChange('address', 'city', text)}
-                  error={errors.city}
-                  required={true}
-                  id="field-city"
-                  autoComplete="address-level2"
-                  textContentType="addressCity"
-                />
-                
-                <AddressAutocomplete
-                  postcode={address.postcode}
-                  onPostcodeChange={(text) => handleInputChange('address', 'postcode', text)}
-                  onAddressSelected={(selectedAddress) => {
-                    handleInputChange('address', 'address1', selectedAddress.line1 || '');
-                    handleInputChange('address', 'address2', selectedAddress.line2 || '');
-                    handleInputChange('address', 'city', selectedAddress.city || '');
-                    handleInputChange('address', 'county', selectedAddress.county || '');
-                    handleInputChange('address', 'postcode', selectedAddress.postcode || '');
-                  }}
-                  error={errors.postcode}
-                  id="field-postcode"
-                />
-                
-                <FormField
-                  label="Phone"
-                  placeholder="Phone"
-                  value={address.phone}
-                  onChangeText={(text) => handleInputChange('address', 'phone', text)}
-                  keyboardType="phone-pad"
-                  error={errors.phone}
-                  required={false}
-                  validator={validators.phone}
-                  info="For delivery updates"
-                  icon="phone"
-                  id="field-phone"
-                />
-                
-                <View style={styles.checkboxRow}>
-                  <Switch
-                    value={smsMarketing}
-                    onValueChange={setSmsMarketing}
-                    trackColor={{ false: '#d0d0d0', true: colors.gold }}
-                    thumbColor={colors.white}
-                  />
-                  <Text style={styles.checkboxLabel}>Text me with news and offers</Text>
-                </View>
-              </CollapsibleSection>
-              
-              {/* Delivery Method */}
-              <CollapsibleSection title="Delivery Method" initiallyCollapsed={false}>
-                <Text style={styles.sectionTitle}>Delivery method</Text>
-                
-                <Pressable 
-                  style={[styles.shippingOption, shippingOption === 'standard' && styles.shippingOptionSelected]}
-                  onPress={() => setShippingOption('standard')}
-                >
-                  <View style={[styles.radioCircle, shippingOption === 'standard' && styles.radioCircleSelected]}>
-                    {shippingOption === 'standard' && <View style={styles.radioCircleDot} />}
-                  </View>
-                  <View style={styles.shippingOptionDetails}>
-                    <Text style={styles.shippingOptionLabel}>Standard Delivery</Text>
-                  </View>
-                  <Text style={styles.shippingOptionPrice}>£5.99</Text>
-                </Pressable>
-                
-                <Pressable 
-                  style={[styles.shippingOption, shippingOption === 'express' && styles.shippingOptionSelected]}
-                  onPress={() => setShippingOption('express')}
-                >
-                  <View style={[styles.radioCircle, shippingOption === 'express' && styles.radioCircleSelected]}>
-                    {shippingOption === 'express' && <View style={styles.radioCircleDot} />}
-                  </View>
-                  <View style={styles.shippingOptionDetails}>
-                    <Text style={styles.shippingOptionLabel}>Express Delivery</Text>
-                  </View>
-                  <Text style={styles.shippingOptionPrice}>£15.99</Text>
-                </Pressable>
-              </CollapsibleSection>
-              
-              {/* Payment */}
-              <CollapsibleSection title="Payment" initiallyCollapsed={false}>
-                <Text style={styles.sectionTitle}>Payment</Text>
-                
-                <View style={styles.paymentMethodsContainer}>
-                  <Pressable 
-                    style={[styles.paymentMethod, selectedPaymentMethod === 'card' && styles.paymentMethodSelected]}
-                    onPress={() => setSelectedPaymentMethod('card')}
-                  >
-                    <View style={styles.radioCircle}>
-                      {selectedPaymentMethod === 'card' && <View style={styles.radioCircleDot} />}
-                    </View>
-                    <View style={styles.paymentMethodDetails}>
-                      <Text style={styles.paymentMethodLabel}>Credit / Debit Card</Text>
-                      <Text style={styles.paymentMethodDescription}>All major cards accepted</Text>
-                    </View>
-                    <Image 
-                      source={require('../assets/images/payment-logo.png')} 
-                      style={styles.paymentMethodIcon} 
-                      resizeMode="contain"
-                    />
-                  </Pressable>
                   
-                  <Pressable 
-                    style={[styles.paymentMethod, selectedPaymentMethod === 'paypal' && styles.paymentMethodSelected]}
-                    onPress={() => setSelectedPaymentMethod('paypal')}
-                  >
-                    <View style={styles.radioCircle}>
-                      {selectedPaymentMethod === 'paypal' && <View style={styles.radioCircleDot} />}
+                {/* Express Checkout Options */}
+                <View style={styles.expressCheckoutContainer}>
+                  <Text style={styles.expressCheckoutTitle}>Express checkout</Text>
+                  
+                  {/* Express PayPal Checkout */}
+                  {expressCheckoutMethod === 'paypal' ? (
+                    <View style={{marginBottom: 15}}>
+                      <PayPalScriptProvider options={{ 
+                        'client-id': PAYPAL_CLIENT_ID,
+                        currency: 'GBP',
+                        intent: 'capture',
+                        components: 'buttons'
+                      }}>
+                        <PayPalButtons
+                          style={{
+                            layout: 'horizontal',
+                            color: 'gold',
+                            shape: 'rect',
+                            label: 'checkout',
+                            height: 45
+                          }}
+                          createOrder={(data, actions) => {
+                            return actions.order.create({
+                              purchase_units: [{
+                                amount: {
+                                  value: calculateTotal().toFixed(2),
+                                  currency_code: 'GBP',
+                                  breakdown: {
+                                    item_total: {
+                                      value: (calculateTotal() - (shippingOption === 'standard' ? 5.99 : 15.99)).toFixed(2),
+                                      currency_code: 'GBP'
+                                    },
+                                    shipping: {
+                                      value: shippingOption === 'standard' ? '5.99' : '15.99',
+                                      currency_code: 'GBP'
+                                    }
+                                  }
+                                },
+                                description: `Express Checkout Order`
+                              }]
+                            });
+                          }}
+                          onApprove={(data, actions) => {
+                            return actions.order.capture().then((details) => {
+                              console.log('Express PayPal transaction completed', details);
+                              handleCheckoutSuccess(details.payer.email_address || 'customer@example.com');
+                            });
+                          }}
+                          onError={(err) => {
+                            console.error('Express PayPal error:', err);
+                            alert(`Express PayPal Error: ${err.message || 'Unknown error'}. Please try again.`);
+                            setExpressCheckoutMethod(null);
+                          }}
+                          onCancel={() => {
+                            setExpressCheckoutMethod(null);
+                          }}
+                        />
+                        <Pressable 
+                          style={[styles.textButton, {marginTop: 10}]}
+                          onPress={() => setExpressCheckoutMethod(null)}
+                        >
+                          <Text style={styles.textButtonLabel}>Cancel and use standard checkout</Text>
+                        </Pressable>
+                      </PayPalScriptProvider>
                     </View>
-                    <View style={styles.paymentMethodDetails}>
-                      <Text style={styles.paymentMethodLabel}>PayPal</Text>
-                      <Text style={styles.paymentMethodDescription}>Fast and secure checkout</Text>
-                    </View>
-                    <FontAwesome name="paypal" size={24} color="#003087" style={{marginHorizontal: 8}} />
-                  </Pressable>
-
-                  <Pressable 
-                    style={[styles.paymentMethod, selectedPaymentMethod === 'klarna' && styles.paymentMethodSelected]}
-                    onPress={() => setSelectedPaymentMethod('klarna')}
-                  >
-                    <View style={styles.radioCircle}>
-                      {selectedPaymentMethod === 'klarna' && <View style={styles.radioCircleDot} />}
-                    </View>
-                    <View style={styles.paymentMethodDetails}>
-                      <Text style={styles.paymentMethodLabel}>Klarna</Text>
-                      <Text style={styles.paymentMethodDescription}>Pay in 3 interest-free installments</Text>
-                    </View>
-                    <Image 
-                      source={require('../assets/images/klarna-logo.png')} 
-                      style={[styles.paymentMethodIcon, {width: 40}]} 
-                      resizeMode="contain"
-                      defaultSource={require('../assets/images/klarna-logo.png')}
-                      fallback={<Text style={{color: colors.gold, fontWeight: 'bold'}}>Klarna</Text>}
-                    />
-                  </Pressable>
-
-                  <Pressable 
-                    style={[styles.paymentMethod, selectedPaymentMethod === 'clearpay' && styles.paymentMethodSelected]}
-                    onPress={() => setSelectedPaymentMethod('clearpay')}
-                  >
-                    <View style={styles.radioCircle}>
-                      {selectedPaymentMethod === 'clearpay' && <View style={styles.radioCircleDot} />}
-                    </View>
-                    <View style={styles.paymentMethodDetails}>
-                      <Text style={styles.paymentMethodLabel}>Clearpay</Text>
-                      <Text style={styles.paymentMethodDescription}>Pay in 4 interest-free installments</Text>
-                    </View>
-                    <Image 
-                      source={require('../assets/images/clearpay-logo.png')} 
-                      style={[styles.paymentMethodIcon, {width: 40}]} 
-                      resizeMode="contain"
-                      defaultSource={require('../assets/images/clearpay-logo.png')}
-                      fallback={<Text style={{color: colors.gold, fontWeight: 'bold'}}>Clearpay</Text>}
-                    />
-                  </Pressable>
+                  ) : (
+                    <>
+                      <View style={styles.expressPaymentRow}>
+                        <Pressable 
+                          style={styles.expressPaymentButton}
+                          onPress={() => setExpressCheckoutMethod('paypal')}
+                          accessibilityLabel="Pay with PayPal"
+                        >
+                          <Text style={styles.paypalText}>PayPal</Text>
+                        </Pressable>
+                        <Pressable 
+                          style={styles.expressPaymentButton}
+                          onPress={() => {
+                            setSelectedPaymentMethod('card');
+                            setTimeout(() => {
+                              const paymentSection = document.getElementById('payment-section');
+                              if (paymentSection) {
+                                paymentSection.scrollIntoView({ behavior: 'smooth' });
+                              }
+                            }, 100);
+                          }}
+                          accessibilityLabel="Pay with Apple Pay"
+                        >
+                          <Text style={styles.applePayText}>Apple Pay</Text>
+                        </Pressable>
+                        <Pressable 
+                          style={styles.expressPaymentButton}
+                          onPress={() => {
+                            setSelectedPaymentMethod('card');
+                            setTimeout(() => {
+                              const paymentSection = document.getElementById('payment-section');
+                              if (paymentSection) {
+                                paymentSection.scrollIntoView({ behavior: 'smooth' });
+                              }
+                            }, 100);
+                          }}
+                          accessibilityLabel="Pay with Google Pay"
+                        >
+                          <Text style={styles.googlePayText}>G Pay</Text>
+                        </Pressable>
+                      </View>
+                      <View style={styles.orDivider}>
+                        <View style={styles.dividerLine} />
+                        <Text style={styles.orText}>OR</Text>
+                        <View style={styles.dividerLine} />
+                      </View>
+                    </>
+                  )}
                 </View>
-                
-                {selectedPaymentMethod === 'card' && (
-                  <StripePaymentForm 
-                    cart={cart}
-                    contact={contact}
-                    address={address}
-                    errors={errors}
-                    setErrors={setErrors}
-                    paying={paying}
-                    setPaying={setPaying}
-                    validateForm={validateForm}
-                    removeFromCart={removeFromCart}
-                    onSuccess={handleCheckoutSuccess}
-                    coupon={coupon}
-                    discountAmount={getDiscountAmount()}
-                    preferredPaymentMethodId={preferredPaymentMethodId}
+
+                {/* Contact Information */}
+                <CollapsibleSection title="Contact Information" initiallyCollapsed={false}>
+                  <FormField
+                    placeholder="Email address"
+                    value={contact.email}
+                    onChangeText={(text) => handleInputChange('contact', 'email', text)}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoComplete="email"
+                    textContentType="emailAddress"
+                    error={errors.email}
+                    required={true}
+                    validator={validators.email}
+                    icon="envelope"
+                    id="field-email"
                   />
-                )}
-                
-                {selectedPaymentMethod === 'paypal' && (
-                  <FadeIn>
-                    <View style={styles.alternativePaymentContainer}>
-                      <Text style={styles.alternativePaymentText}>You will be redirected to PayPal to complete your purchase.</Text>
-                      <AnimatedButton 
-                        style={styles.checkoutButton}
-                        onPress={() => handleAlternativePayment('paypal')}
-                        accessibilityLabel="Continue to PayPal"
-                      >
-                        Continue to PayPal
-                      </AnimatedButton>
-                    </View>
-                  </FadeIn>
-                )}
-                
-                {selectedPaymentMethod === 'klarna' && (
-                  <FadeIn>
-                    <View style={styles.alternativePaymentContainer}>
-                      <Text style={styles.alternativePaymentText}>Pay in 3 interest-free installments with Klarna.</Text>
-                      <AnimatedButton 
-                        style={styles.checkoutButton}
-                        onPress={() => handleAlternativePayment('klarna')}
-                        accessibilityLabel="Continue to Klarna"
-                      >
-                        Continue to Klarna
-                      </AnimatedButton>
-                    </View>
-                  </FadeIn>
-                )}
-                
-                {selectedPaymentMethod === 'clearpay' && (
-                  <FadeIn>
-                    <View style={styles.alternativePaymentContainer}>
-                      <Text style={styles.alternativePaymentText}>Pay in 4 interest-free installments with Clearpay.</Text>
-                      <AnimatedButton 
-                        style={styles.checkoutButton}
-                        onPress={() => handleAlternativePayment('clearpay')}
-                        accessibilityLabel="Continue to Clearpay"
-                      >
-                        Continue to Clearpay
-                      </AnimatedButton>
-                    </View>
-                  </FadeIn>
-                )}
-              </CollapsibleSection>
-              
-              {/* Remember Me & Marketing */}
-              <CollapsibleSection title="Preferences" initiallyCollapsed={true}>
-                <View style={styles.optionsContainer}>
+                  
                   <View style={styles.checkboxRow}>
                     <Switch
-                      value={rememberInfo}
-                      onValueChange={setRememberInfo}
+                      value={smsMarketing}
+                      onValueChange={setSmsMarketing}
                       trackColor={{ false: '#d0d0d0', true: colors.gold }}
                       thumbColor={colors.white}
                     />
-                    <Text style={styles.checkboxLabel}>Remember me</Text>
+                    <Text style={styles.checkboxLabel}>Email me with news and offers</Text>
                   </View>
+                </CollapsibleSection>
+                
+                {/* Delivery Information */}
+                <CollapsibleSection title="Delivery Information" initiallyCollapsed={false}>
+                  <View style={styles.formRow}>
+                    <FormField
+                      placeholder="Your full name"
+                      value={address.name}
+                      onChangeText={(text) => handleInputChange('address', 'name', text)}
+                      autoComplete="name"
+                      textContentType="name"
+                      error={errors.name}
+                      required={true}
+                      validator={validators.name}
+                      icon="user"
+                      id="field-name"
+                    />
+                  </View>
+                  
+                  <FormField
+                    placeholder="Address"
+                    value={address.address1}
+                    onChangeText={(text) => handleInputChange('address', 'address1', text)}
+                    error={errors.address1}
+                    required={true}
+                    id="field-address1"
+                    autoComplete="street-address"
+                    textContentType="streetAddressLine1"
+                  />
+                  
+                  <FormField
+                    placeholder="Apartment, suite, etc. (optional)"
+                    value={address.address2}
+                    onChangeText={(text) => handleInputChange('address', 'address2', text)}
+                    error={errors.address2}
+                    required={false}
+                    id="field-address2"
+                    textContentType="streetAddressLine2"
+                  />
+                  
+                  <View style={styles.rowContainer}>
+                    <FormField
+                      placeholder="City"
+                      value={address.city}
+                      onChangeText={(text) => handleInputChange('address', 'city', text)}
+                      error={errors.city}
+                      required={true}
+                      id="field-city"
+                      autoComplete="address-level2"
+                      textContentType="addressCity"
+                      style={{flex: 1, marginRight: 8}}
+                    />
+                    
+                    <AddressAutocomplete
+                      postcode={address.postcode}
+                      onPostcodeChange={(text) => handleInputChange('address', 'postcode', text)}
+                      onAddressSelected={(selectedAddress) => {
+                        handleInputChange('address', 'address1', selectedAddress.line1 || '');
+                        handleInputChange('address', 'address2', selectedAddress.line2 || '');
+                        handleInputChange('address', 'city', selectedAddress.city || '');
+                        handleInputChange('address', 'county', selectedAddress.county || '');
+                        handleInputChange('address', 'postcode', selectedAddress.postcode || '');
+                      }}
+                      error={errors.postcode}
+                      id="field-postcode"
+                      style={{flex: 1}}
+                    />
+                  </View>
+                  
+                  <FormField
+                    placeholder="Phone"
+                    value={address.phone}
+                    onChangeText={(text) => handleInputChange('address', 'phone', text)}
+                    keyboardType="phone-pad"
+                    error={errors.phone}
+                    required={false}
+                    validator={validators.phone}
+                    info="For delivery updates"
+                    icon="phone"
+                    id="field-phone"
+                  />
                   
                   <View style={styles.checkboxRow}>
                     <Switch
@@ -1036,219 +923,395 @@ export default function CheckoutScreen() {
                     />
                     <Text style={styles.checkboxLabel}>Text me with news and offers</Text>
                   </View>
-                </View>
-              </CollapsibleSection>
-            </View>
-            
-            {/* Right Column - Order Summary */}
-            <View style={[styles.rightColumn, isDesktop && styles.rightColumnDesktop]}>
-              <View style={styles.orderSummaryContainer}>
-                <Text style={styles.orderSummaryTitle}>Order summary</Text>
+                </CollapsibleSection>
                 
-                {/* Cart Items */}
-                <View style={styles.cartItemsContainer}>
-                  {cart.map((item, index) => (
-                    <View key={item.id} style={[styles.cartItemRow, index < cart.length - 1 && styles.cartItemBorder]}>
-                      <View style={styles.cartItemImageContainer}>
-                        <Image 
-                          source={{ uri: item.product?.image_url || 'https://via.placeholder.com/60' }}
-                          style={styles.cartItemImage}
-                          resizeMode="cover"
-                        />
-                        <View style={styles.cartItemQuantityBadge}>
-                          <Text style={styles.cartItemQuantityText}>{item.quantity}</Text>
-                        </View>
-                      </View>
-                      <View style={styles.cartItemInfo}>
-                        <Text style={styles.cartItemName}>{item.product?.name}</Text>
-                        <Text style={styles.cartItemVariant}>
-                          {item.variant ? item.variant.name : ''}
-                        </Text>
-                      </View>
-                      <Text style={styles.cartItemPrice}>£{((item.variant ? item.variant.price : item.product?.price) * item.quantity).toFixed(2)}</Text>
-                    </View>
-                  ))}
-                </View>
-                
-                {/* Discount Code */}
-                <View style={styles.discountContainer}>
-                  <TextInput
-                    style={styles.discountInput}
-                    placeholder="Discount code"
-                    value={coupon}
-                    onChangeText={setCoupon}
-                  />
+                {/* Delivery Method */}
+                <CollapsibleSection title="Delivery Method" initiallyCollapsed={false}>
+                  <Text style={styles.sectionTitle}>Delivery method</Text>
+                  
                   <Pressable 
-                    style={[styles.discountButton, !coupon.trim() && styles.discountButtonDisabled]}
-                    onPress={handleApplyCoupon}
-                    disabled={!coupon.trim() || applyingCoupon}
+                    style={[styles.shippingOption, shippingOption === 'standard' && styles.shippingOptionSelected]}
+                    onPress={() => setShippingOption('standard')}
                   >
-                    {applyingCoupon ? (
-                      <ActivityIndicator size="small" color={colors.white} />
-                    ) : (
-                      <Text style={styles.discountButtonText}>Apply</Text>
-                    )}
+                    <View style={[styles.radioCircle, shippingOption === 'standard' && styles.radioCircleSelected]}>
+                      {shippingOption === 'standard' && <View style={styles.radioCircleDot} />}
+                    </View>
+                    <View style={styles.shippingOptionDetails}>
+                      <Text style={styles.shippingOptionLabel}>Standard Delivery</Text>
+                    </View>
+                    <Text style={styles.shippingOptionPrice}>£5.99</Text>
                   </Pressable>
-                </View>
+                  
+                  <Pressable 
+                    style={[styles.shippingOption, shippingOption === 'express' && styles.shippingOptionSelected]}
+                    onPress={() => setShippingOption('express')}
+                  >
+                    <View style={[styles.radioCircle, shippingOption === 'express' && styles.radioCircleSelected]}>
+                      {shippingOption === 'express' && <View style={styles.radioCircleDot} />}
+                    </View>
+                    <View style={styles.shippingOptionDetails}>
+                      <Text style={styles.shippingOptionLabel}>Express Delivery</Text>
+                    </View>
+                    <Text style={styles.shippingOptionPrice}>£15.99</Text>
+                  </Pressable>
+                </CollapsibleSection>
                 
-                {couponStatus && (
-                  <Text style={couponStatus.valid ? styles.successText : styles.errorText}>
-                    {couponStatus.valid ? couponStatus.message : couponStatus.error}
-                  </Text>
-                )}
-                
-                {/* Order Calculations */}
-                <View style={styles.orderSummarySection}>
-                  <View style={styles.summaryRow}>
-                    <Text style={styles.summaryLabel}>Subtotal</Text>
-                    <Text style={styles.summaryValue}>£{cart.reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2)}</Text>
+                {/* Payment */}
+                <CollapsibleSection title="Payment" initiallyCollapsed={false} id="payment-section">
+                  <Text style={styles.sectionTitle}>Payment</Text>
+                  
+                  <View style={styles.paymentMethodsContainer}>
+                    <Pressable 
+                      style={[styles.paymentMethod, selectedPaymentMethod === 'card' && styles.paymentMethodSelected]}
+                      onPress={() => setSelectedPaymentMethod('card')}
+                    >
+                      <View style={styles.radioCircle}>
+                        {selectedPaymentMethod === 'card' && <View style={styles.radioCircleDot} />}
+                      </View>
+                      <View style={styles.paymentMethodDetails}>
+                        <Text style={styles.paymentMethodLabel}>Credit / Debit Card</Text>
+                        <Text style={styles.paymentMethodDescription}>All major cards accepted</Text>
+                      </View>
+                      <Image 
+                        source={require('../assets/images/payment-logo.png')} 
+                        style={styles.paymentMethodIcon} 
+                        resizeMode="contain"
+                      />
+                    </Pressable>
+                    
+                    <Pressable 
+                      style={[styles.paymentMethod, selectedPaymentMethod === 'paypal' && styles.paymentMethodSelected]}
+                      onPress={() => setSelectedPaymentMethod('paypal')}
+                    >
+                      <View style={styles.radioCircle}>
+                        {selectedPaymentMethod === 'paypal' && <View style={styles.radioCircleDot} />}
+                      </View>
+                      <View style={styles.paymentMethodDetails}>
+                        <Text style={styles.paymentMethodLabel}>PayPal</Text>
+                        <Text style={styles.paymentMethodDescription}>Fast and secure checkout</Text>
+                      </View>
+                      <FontAwesome name="paypal" size={24} color="#003087" style={{marginHorizontal: 8}} />
+                    </Pressable>
+
+                    <Pressable 
+                      style={[styles.paymentMethod, selectedPaymentMethod === 'klarna' && styles.paymentMethodSelected]}
+                      onPress={() => setSelectedPaymentMethod('klarna')}
+                    >
+                      <View style={styles.radioCircle}>
+                        {selectedPaymentMethod === 'klarna' && <View style={styles.radioCircleDot} />}
+                      </View>
+                      <View style={styles.paymentMethodDetails}>
+                        <Text style={styles.paymentMethodLabel}>Klarna</Text>
+                        <Text style={styles.paymentMethodDescription}>Pay in 3 interest-free installments</Text>
+                      </View>
+                      <Image 
+                        source={require('../assets/images/klarna-logo.png')} 
+                        style={[styles.paymentMethodIcon, {width: 40}]} 
+                        resizeMode="contain"
+                        defaultSource={require('../assets/images/klarna-logo.png')}
+                        fallback={<Text style={{color: colors.gold, fontWeight: 'bold'}}>Klarna</Text>}
+                      />
+                    </Pressable>
+
+                    <Pressable 
+                      style={[styles.paymentMethod, selectedPaymentMethod === 'clearpay' && styles.paymentMethodSelected]}
+                      onPress={() => setSelectedPaymentMethod('clearpay')}
+                    >
+                      <View style={styles.radioCircle}>
+                        {selectedPaymentMethod === 'clearpay' && <View style={styles.radioCircleDot} />}
+                      </View>
+                      <View style={styles.paymentMethodDetails}>
+                        <Text style={styles.paymentMethodLabel}>Clearpay</Text>
+                        <Text style={styles.paymentMethodDescription}>Pay in 4 interest-free installments</Text>
+                      </View>
+                      <Image 
+                        source={require('../assets/images/clearpay-logo.png')} 
+                        style={[styles.paymentMethodIcon, {width: 40}]} 
+                        resizeMode="contain"
+                        defaultSource={require('../assets/images/clearpay-logo.png')}
+                        fallback={<Text style={{color: colors.gold, fontWeight: 'bold'}}>Clearpay</Text>}
+                      />
+                    </Pressable>
                   </View>
                   
-                  {couponStatus?.valid && (
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Discount</Text>
-                      <Text style={[styles.summaryValue, { color: colors.ruby }]}>-£{getDiscountAmount().toFixed(2)}</Text>
-                    </View>
+                  {selectedPaymentMethod === 'card' && (
+                    <StripePaymentForm 
+                      cart={cart}
+                      contact={contact}
+                      address={address}
+                      errors={errors}
+                      setErrors={setErrors}
+                      paying={paying}
+                      setPaying={setPaying}
+                      validateForm={validateForm}
+                      removeFromCart={removeFromCart}
+                      onSuccess={handleCheckoutSuccess}
+                      coupon={coupon}
+                      discountAmount={getDiscountAmount()}
+                      preferredPaymentMethodId={preferredPaymentMethodId}
+                    />
                   )}
                   
-                  <View style={styles.summaryRow}>
-                    <Text style={styles.summaryLabel}>Shipping</Text>
-                    <Text style={styles.summaryValue}>
-                      {shippingOption === 'express' ? '£4.99' : 'Free'}
-                    </Text>
-                  </View>
+                  {selectedPaymentMethod === 'paypal' && (
+                    <FadeIn>
+                      <View style={styles.alternativePaymentContainer}>
+                        <Text style={styles.alternativePaymentText}>Complete your purchase securely with PayPal.</Text>
+                        {Platform.OS === 'web' ? (
+                          <PayPalScriptProvider options={{ 
+                            'client-id': PAYPAL_CLIENT_ID,
+                            currency: 'GBP',
+                            intent: 'capture',
+                            debug: true,
+                            components: 'buttons'
+                          }}>
+                            <Text style={{marginBottom: 10, color: '#ff0000'}}>
+                              PayPal Client ID: {PAYPAL_CLIENT_ID ? `${PAYPAL_CLIENT_ID.substring(0, 10)}...` : 'Missing'}
+                            </Text>
+                            <PayPalButtons
+                              style={{
+                                layout: 'horizontal',
+                                color: 'gold',
+                                shape: 'rect',
+                                label: 'pay',
+                                height: 45
+                              }}
+                              forceReRender={[address, contact, cart]}
+                              createOrder={(data, actions) => {
+                                if (!validateForm()) {
+                                  triggerHaptic('error');
+                                  return Promise.reject(new Error('Please complete all required fields'));
+                                }
+                                
+                                return actions.order.create({
+                                  purchase_units: [{
+                                    amount: {
+                                      value: calculateTotal().toFixed(2),
+                                      currency_code: 'GBP',
+                                      breakdown: {
+                                        item_total: {
+                                          value: (calculateTotal() - (shippingOption === 'standard' ? 5.99 : 15.99)).toFixed(2),
+                                          currency_code: 'GBP'
+                                        },
+                                        shipping: {
+                                          value: shippingOption === 'standard' ? '5.99' : '15.99',
+                                          currency_code: 'GBP'
+                                        }
+                                      }
+                                    },
+                                    description: `Order from ${address.name}`,
+                                    shipping: {
+                                      name: {
+                                        full_name: address.name
+                                      },
+                                      address: {
+                                        address_line_1: address.line1,
+                                        address_line_2: address.apartment || '',
+                                        admin_area_2: address.city,
+                                        postal_code: address.postcode,
+                                        country_code: 'GB'
+                                      }
+                                    }
+                                  }]
+                                });
+                              }}
+                              onApprove={(data, actions) => {
+                                return actions.order.capture().then((details) => {
+                                  console.log('PayPal transaction completed', details);
+                                  trackEvent('payment_method_selected', {
+                                    payment_method: 'paypal',
+                                    value: calculateTotal(),
+                                    currency: 'GBP'
+                                  });
+                                  handleCheckoutSuccess(contact.email);
+                                });
+                              }}
+                              onError={(err) => {
+                                console.error('PayPal error:', err);
+                                alert(`PayPal Error: ${err.message || 'Unknown error'}. Please check the console for more details or try a different payment method.`);
+                              }}
+                              onInit={() => {
+                                console.log('PayPal buttons initialized');
+                              }}
+                            />
+                          </PayPalScriptProvider>
+                        ) : (
+                          <AnimatedButton 
+                            style={styles.checkoutButton}
+                            onPress={() => handleAlternativePayment('paypal')}
+                            accessibilityLabel="Continue to PayPal"
+                          >
+                            Continue to PayPal
+                          </AnimatedButton>
+                        )}
+                      </View>
+                    </FadeIn>
+                  )}
                   
-                  <View style={styles.summaryDivider} />
+                  {selectedPaymentMethod === 'klarna' && (
+                    <FadeIn>
+                      <View style={styles.alternativePaymentContainer}>
+                        <Text style={styles.alternativePaymentText}>Pay in 3 interest-free installments with Klarna.</Text>
+                        <AnimatedButton 
+                          style={styles.checkoutButton}
+                          onPress={() => handleAlternativePayment('klarna')}
+                          accessibilityLabel="Continue to Klarna"
+                        >
+                          Continue to Klarna
+                        </AnimatedButton>
+                      </View>
+                    </FadeIn>
+                  )}
                   
-                  <View style={styles.summaryRow}>
-                    <Text style={styles.summaryLabelTotal}>Total</Text>
-                    <Text style={styles.summaryValueTotal}>£{calculateTotal()}</Text>
-                  </View>
-                </View>
-              </View>
-              
-              {/* Payment Method */}
-              <View style={styles.formSection}>
-                <Text style={styles.sectionTitle}>Payment</Text>
-                <Text style={styles.securePaymentNote}>
-                  All transactions are secure and encrypted
-                </Text>
-                <View style={styles.securityContainer}>
-                  <View style={styles.securityItem}>
-                    <FontAwesome name="lock" size={16} color={colors.grey} />
-                    <Text style={styles.securityText}>Secure checkout</Text>
-                  </View>
-                  <View style={styles.securityItem}>
-                    <FontAwesome name="shield" size={16} color={colors.grey} />
-                    <Text style={styles.securityText}>Privacy protected</Text>
-                  </View>
-                  <View style={styles.securityItem}>
-                    <FontAwesome name="refresh" size={16} color={colors.grey} />
-                    <Text style={styles.securityText}>30-day returns</Text>
-                  </View>
-                </View>
+                  {selectedPaymentMethod === 'clearpay' && (
+                    <FadeIn>
+                      <View style={styles.alternativePaymentContainer}>
+                        <Text style={styles.alternativePaymentText}>Pay in 4 interest-free installments with Clearpay.</Text>
+                        <AnimatedButton 
+                          style={styles.checkoutButton}
+                          onPress={() => handleAlternativePayment('clearpay')}
+                          accessibilityLabel="Continue to Clearpay"
+                        >
+                          Continue to Clearpay
+                        </AnimatedButton>
+                      </View>
+                    </FadeIn>
+                  )}
+                </CollapsibleSection>
                 
-                <Pressable 
-                  style={[styles.paymentMethod, selectedPaymentMethod === 'card' && styles.paymentMethodSelected]}
-                  onPress={() => setSelectedPaymentMethod('card')}
-                >
-                  <View style={styles.radioCircle}>
-                    {selectedPaymentMethod === 'card' && <View style={styles.radioCircleDot} />}
-                  </View>
-                  <View style={styles.paymentMethodDetails}>
-                    <Text style={styles.paymentMethodLabel}>Credit card</Text>
-                  </View>
-                  <View style={styles.cardIcons}>
-                    <Text style={styles.cardIcon}>VISA</Text>
-                    <Text style={styles.cardIcon}>MC</Text>
-                    <Text style={styles.cardIcon}>AMEX</Text>
-                  </View>
-                </Pressable>
-                
-                {selectedPaymentMethod === 'card' && (
-                  <View style={styles.cardFormContainer}>
-                    <TextInput
-                      style={styles.textInput}
-                      placeholder="Card number"
-                      keyboardType="number-pad"
-                    />
-                    <View style={styles.formRow}>
-                      <TextInput
-                        style={[styles.textInput, styles.inputHalf]}
-                        placeholder="Expiration (MM/YY)"
-                      />
-                      <TextInput
-                        style={[styles.textInput, styles.inputHalf]}
-                        placeholder="Security code"
-                        keyboardType="number-pad"
-                      />
-                    </View>
-                    <TextInput
-                      style={styles.textInput}
-                      placeholder="Name on card"
-                    />
-                    
+                {/* Remember Me & Marketing */}
+                <CollapsibleSection title="Preferences" initiallyCollapsed={true}>
+                  <View style={styles.optionsContainer}>
                     <View style={styles.checkboxRow}>
                       <Switch
-                        value={true}
+                        value={rememberInfo}
+                        onValueChange={setRememberInfo}
                         trackColor={{ false: '#d0d0d0', true: colors.gold }}
                         thumbColor={colors.white}
                       />
-                      <Text style={styles.checkboxLabel}>Save my information for faster checkout</Text>
+                      <Text style={styles.checkboxLabel}>Remember me</Text>
                     </View>
                     
-                    <TouchableOpacity 
-                      style={[
-                        styles.payButton, 
-                        paying && styles.payButtonDisabled
-                      ]} 
-                      onPress={handleCheckout}
-                      disabled={paying}
-                      accessible={true}
-                      accessibilityLabel={paying ? "Processing payment" : "Pay now"}
-                      accessibilityRole="button"
-                      accessibilityState={{ disabled: paying, busy: paying }}
-                    >
-                      <View style={styles.payButtonContent}>
-                        {paying ? (
-                          <>
-                            <ActivityIndicator color="#fff" />
-                            <Text style={[styles.payButtonText, styles.processingText]}>Processing...</Text>
-                          </>
-                        ) : (
-                          <>
-                            <FontAwesome name="lock" size={16} color="#fff" style={styles.securityIcon} />
-                            <Text style={styles.payButtonText}>Pay now</Text>
-                          </>
-                        )}
-                      </View>
-                    </TouchableOpacity>
-                    <Text style={styles.securePaymentText}>
-                      <FontAwesome name="shield" size={12} color={colors.securityGreen} /> Secure payment - Your data is protected
-                    </Text>
-                    
-                    <Text style={styles.termsText}>
-                      By placing your order, you agree to our Terms of Service and Privacy Policy
-                    </Text>
+                    <View style={styles.checkboxRow}>
+                      <Switch
+                        value={smsMarketing}
+                        onValueChange={setSmsMarketing}
+                        trackColor={{ false: '#d0d0d0', true: colors.gold }}
+                        thumbColor={colors.white}
+                      />
+                      <Text style={styles.checkboxLabel}>Text me with news and offers</Text>
+                    </View>
                   </View>
-                )}
+                </CollapsibleSection>
               </View>
-            </View>
-          </Animated.View>
-        </Elements>
-      )}
-      
-      {/* Order Confirmation Modal */}
-      <ConfirmationModal
-        open={confirmationOpen}
-        onClose={handleContinueShopping}
-        onContinue={handleContinueShopping}
-        autoCloseMs={5000}
-      />
-    </ScrollView>
-  );
-}
+              
+              {/* Right Column - Order Summary */}
+              <View style={[styles.rightColumn, isDesktop && styles.rightColumnDesktop]}>
+                <View style={styles.orderSummaryContainer}>
+                  <Text style={styles.orderSummaryTitle}>Order summary</Text>
+                  
+                  <View style={styles.cartItemsContainer}>
+                    {cart.map((item) => (
+                      <View key={item.id} style={styles.cartItem}>
+                        <Image 
+                          source={{ uri: item.image_url || 'https://via.placeholder.com/60' }}
+                          style={styles.cartItemImage} 
+                        />
+                        <View style={styles.cartItemDetails}>
+                          <Text style={styles.cartItemName}>{item.name}</Text>
+                          <Text style={styles.cartItemQuantity}>Qty: {item.quantity}</Text>
+                        </View>
+                        <Text style={styles.cartItemPrice}>£{(item.price * item.quantity).toFixed(2)}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  
+                  <View style={styles.discountContainer}>
+                    <TextInput
+                      style={styles.discountInput}
+                      placeholder="Discount code"
+                      value={coupon}
+                      onChangeText={setCoupon}
+                    />
+                    <Pressable 
+                      style={[styles.discountButton, !coupon.trim() && styles.discountButtonDisabled]}
+                      onPress={handleApplyCoupon}
+                      disabled={!coupon.trim() || applyingCoupon}
+                    >
+                      {applyingCoupon ? (
+                        <ActivityIndicator size="small" color={colors.white} />
+                      ) : (
+                        <Text style={styles.discountButtonText}>Apply</Text>
+                      )}
+                    </Pressable>
+                  </View>
+                  
+                  {couponStatus && (
+                    <Text style={couponStatus.valid ? styles.successText : styles.errorText}>
+                      {couponStatus.valid ? couponStatus.message : couponStatus.error}
+                    </Text>
+                  )}
+                  
+                  <View style={styles.orderSummarySection}>
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>Subtotal</Text>
+                      <Text style={styles.summaryValue}>£{cart.reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2)}</Text>
+                    </View>
+                    
+                    {couponStatus?.valid && (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Discount</Text>
+                        <Text style={[styles.summaryValue, { color: colors.ruby }]}>-£{getDiscountAmount().toFixed(2)}</Text>
+                      </View>
+                    )}
+                    
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>Shipping</Text>
+                      <Text style={styles.summaryValue}>
+                        {shippingOption === 'express' ? '£4.99' : 'Free'}
+                      </Text>
+                    </View>
+                    
+                    <View style={styles.summaryDivider} />
+                    
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabelTotal}>Total</Text>
+                      <Text style={styles.summaryValueTotal}>£{calculateTotal().toFixed(2)}</Text>
+                    </View>
+                  </View>
+                </View>
+                
+                <View style={styles.formSection}>
+                  <Text style={styles.sectionTitle}>Payment</Text>
+                  <View style={styles.trustBadgesContainer}>
+                    <View style={styles.trustBadge}>
+                      <FontAwesome name="lock" size={20} color={colors.gold} />
+                      <Text style={styles.trustBadgeText}>Secure & Encrypted Checkout</Text>
+                    </View>
+                    <View style={styles.trustBadge}>
+                      <FontAwesome name="shield" size={20} color={colors.gold} />
+                      <Text style={styles.trustBadgeText}>Privacy Protected</Text>
+                    </View>
+                    <View style={styles.trustBadge}>
+                      <FontAwesome name="undo" size={20} color={colors.gold} />
+                      <Text style={styles.trustBadgeText}>30-Day Money-Back Guarantee</Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </Animated.View>
+          </Elements>
+        )}
+      </ScrollView>
 
+      <ConfirmationModal
+        visible={confirmationOpen}
+        onClose={handleContinueShopping}
+        orderEmail={orderEmail}
+      />
+    </>
+  );
+
+}
 // Stripe Payment Form Component
 function StripePaymentForm({ cart, contact, address, errors, setErrors, paying, setPaying, validateForm, removeFromCart, onSuccess, coupon, discountAmount, preferredPaymentMethodId }) {
   const stripe = useStripe();
@@ -1333,7 +1396,7 @@ function StripePaymentForm({ cart, contact, address, errors, setErrors, paying, 
       const paymentMethod = {
         id: preferredPaymentMethodId, // Use the specified payment method ID
         billing_details: {
-          name: `${address.firstName} ${address.lastName}`,
+          name: address.name,
           email: contact.email,
           address: {
             line1: address.address1,
@@ -1366,10 +1429,10 @@ function StripePaymentForm({ cart, contact, address, errors, setErrors, paying, 
           paymentMethodId: paymentMethod.id,
           amount: Math.round(total * 100), // Convert to cents
           currency: 'gbp',
-          description: `Order from ${address.firstName} ${address.lastName}`,
+          description: `Order from ${address.name}`,
           receipt_email: contact.email,
           metadata: {
-            customer_name: `${address.firstName} ${address.lastName}`,
+            customer_name: address.name,
             address_line1: address.address1,
             address_city: address.city,
             address_postcode: address.postcode,
@@ -1530,6 +1593,55 @@ function StripePaymentForm({ cart, contact, address, errors, setErrors, paying, 
 
 // Main styles for the checkout page
 const styles = StyleSheet.create({
+  cartItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderColor: colors.lightGrey,
+  },
+  cartItemImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    marginRight: 15,
+  },
+  cartItemDetails: {
+    flex: 1,
+  },
+  cartItemName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.onyxBlack,
+  },
+  cartItemQuantity: {
+    fontSize: 14,
+    color: colors.grey,
+    marginTop: 4,
+  },
+  cartItemPrice: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.onyxBlack,
+  },
+  trustBadgesContainer: {
+    marginTop: 20,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderColor: colors.lightGrey,
+  },
+  trustBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  trustBadgeText: {
+    marginLeft: 10,
+    fontSize: 14,
+    color: colors.onyxBlack,
+    fontWeight: '500',
+  },
   container: {
     flex: 1,
     backgroundColor: colors.white,
@@ -1942,9 +2054,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.grey,
   },
-  cardFormContainer: {
-    marginTop: 12,
-    marginBottom: 16,
+  alternativePaymentContainer: {
+    marginTop: 16,
+    marginBottom: 30,
+    alignItems: 'center',
+  },
+  rowContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    width: '100%',
   },
   payNowButton: {
     backgroundColor: colors.gold,

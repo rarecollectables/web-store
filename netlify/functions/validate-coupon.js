@@ -28,12 +28,14 @@ exports.handler = async (event) => {
     }
 
     // Find the promotion code in Stripe
+    console.log(`Searching for coupon: "${coupon}"`);
+
+    // Find the promotion code in Stripe
     const promoCodes = await stripe.promotionCodes.list({
       code: coupon,
       active: true,
       limit: 1
     });
-    console.log('Stripe promoCodes API result:', JSON.stringify(promoCodes));
 
     if (!promoCodes.data.length) {
       return { statusCode: 400, body: JSON.stringify({ error: 'Invalid or expired coupon code.' }) };
@@ -59,6 +61,7 @@ exports.handler = async (event) => {
       body: JSON.stringify({ valid: true, discount, promo }),
     };
   } catch (error) {
+    console.error('Stripe API Error:', JSON.stringify(error, null, 2));
     return {
       statusCode: 500,
       body: JSON.stringify({ error: error.message }),
